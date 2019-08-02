@@ -23,3 +23,18 @@ def walls_to_nxgraph(walls):
                         # this is a genuine neighbor, add an edge in the graph
                         graph.add_edge((x, y), neighbor)
     return graph
+
+def food_to_nxgraph(food):
+    """Return a networkx Graph object given the walls"""
+    import networkx
+    graph = networkx.Graph()
+    for x, y in food:
+        for delta_x, delta_y in ((1,0), (-1,0), (0,1), (0,-1)):
+            neighbor = (x + delta_x, y + delta_y)
+            # we don't need to check for getting neighbors out of the maze
+            # because our mazes are all surrounded by walls, i.e. our
+            # deltas will not put us out of the maze
+            if neighbor in food:
+                # this is a genuine neighbor, add an edge in the graph
+                    graph.add_edge((x, y), neighbor)
+    return graph
