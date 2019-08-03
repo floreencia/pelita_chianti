@@ -9,29 +9,35 @@ from pelita.utils import Graph
 
 import networkx as nx
 from utils import walls_to_nxgraph
+import numpy as np
 
-
-def largest_food_cluster(net, bot):
+def largest_food_clusters(net, bot):
+    """
+    Returns a list of lists with the coordinates of the food, sorted by size of the cluster
+    """
     ## set food attr
     for n in net.nodes:
         if n in bot.enemy[0].food:
             net.node[n]['food'] = True
-
+        else:
+            net.node[n]['food'] = False
+    
     ## define food network
-    food_dict = nx.get_node_attributes(net, 'food')
-    foodnet = net.subgraph(food_dict.keys())
+    food_node_dict = nx.get_node_attributes(net, 'food')
+    food_nodes = [k for k in food_node_dict if food_node_dict[k]]
+    foodnet = net.subgraph(food_nodes)
 
     ## find largest food cluster
     fnets = list(nx.connected_component_subgraphs(foodnet))
     net_sizes = ([(i, len(thisnet.nodes)) for i, thisnet in enumerate(fnets)])
-    largest_food_cluster = max(net_sizes, key=lambda x: x[1])[0]
-    coordinates_li = list(fnets[largest_food_cluster].nodes)
+    largest_food_cluster_ix = sorted(net_sizes, key=lambda x: x[1], reverse=True)
+    coordinates_li = [list(fnets[ix].nodes) for ix,_ in largest_food_cluster_ix]
 
     return coordinates_li
 
 
 def shortest_path_to_cluster(coordinates_list, bot, net):
-    '''returns path to closest food pellet
+    '''returns path to closest food pellet in a cluster
     Parameters
     -----------
     coordiates_list: list
@@ -64,33 +70,36 @@ def move(bot, state):
     if state is None:
         # initialize the state dictionary
         state = {}
-        # each bot needs its own state dictionary to keep track of the
-        # food targets
+        # each bot needs its own state dictionary to keep track of the food targets
         state[0] = (None, None, None)
         state[1] = (None, None, None)
-        # initialize a graph representation of the maze
-        # this can be shared among our bots
+        # initialize a graph representation of the maze this can be shared among our bots
         state['graph'] = walls_to_nxgraph(bot.walls)
 
     target, path, cluster = state[bot.turn]
-    print("target", target, "cluster", cluster)
-    if bot.position==target:
-        print("I ate it")
+
+    print("pos",bot.position, "target", target, "cluster", cluster)
+    if bot.position==target or bot.other.position==target:
+        print("We ate it")
+        cluster.remove(target)
     # choose a target food pellet if we still don't have one or
     # if the old target has been already eaten
-    if (target is None):
+    if (target is None) or (len(cluster) == 0):
         print("resetting cluster")
         # position of the target food pellet
-        #target = #bot.random.choice(enemy[0].food)
         # shortest path from here to the target
-        cluster = largest_food_cluster(state['graph'], bot)
+        cluster_list = largest_food_clusters(state['graph'], bot)
+        cluster = cluster_list.pop(0)
+        # try to have both bots going for different clusters, when possible
+        if state[abs(bot.turn - 1)][2] == cluster and len(cluster_list)!=0:
+            cluster = cluster_list.pop(0)
+        print("new cluster is", cluster)
         path = shortest_path_to_cluster(cluster, bot, state['graph']) #shortest_path(bot.position, target, state['graph'])
         path = path[1:]
         target = path[-1]
         state[bot.turn] = (target, path, cluster)
     elif (target not in enemy[0].food):
         print("new food in cluster")
-        cluster.remove(target)
         path = shortest_path_to_cluster(cluster, bot, state['graph']) #shortest_path(bot.position, target, state['graph'])
         path = path[1:]
         target = path[-1]
@@ -132,7 +141,7 @@ def move(bot, state):
     if next_pos not in safe_positions:
         # 1. Let's forget about this target and this path
         #    We will choose a new target in the next round
-        state[bot.turn] = (None, None)
+        state[bot.turn] = (None, None, None)
         # Choose one safe position at random if we have any
         if safe_positions:
             next_pos = bot.random.choice(safe_positions)
@@ -143,6 +152,21 @@ def move(bot, state):
             else:
                 # unless the next step is suicide, just pursue our goal
                 pass
+
+
+    # if we are irreparably stuck, only suicide will help
+    lastten = np.asarray(bot.track[-10:])
+    suicide_possible_b0 = (not bot.enemy[0].is_noisy) & (bot.enemy[0].position in bot.legal_positions)
+    suicide_possible_b1 = (not bot.enemy[1].is_noisy) & (bot.enemy[1].position in bot.legal_positions)
+    if (len(np.unique(lastten)) < 4):
+        bot.say("I am stuck!")
+        state[bot.turn] = (None, None, None)
+    if (len(np.unique(lastten)) < 4) & (suicide_possible_b0 or suicide_possible_b1):
+        bot.say("goodbye, cruel world")
+        if suicide_possible_b0:
+            next_pos = bot.enemy[0].position
+        elif suicide_possible_b1:
+            next_pos = bot.enemy[1].position
 
     return next_pos, state
 
