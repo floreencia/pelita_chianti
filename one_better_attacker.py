@@ -72,15 +72,14 @@ def move(bot, state):
         # initialize the state dictionary
         state = {}
         # each bot needs its own state dictionary to keep track of the food targets
-        state[0] = (None, None, None, False)
-        state[1] = (None, None, None, False)
+        state['bot_status'] = (None, None, None, False)
         # initialize a graph representation of the maze this can be shared among our bots
         state['graph'] = walls_to_nxgraph(bot.walls)
 
-    target, path, cluster, is_stuck = state[bot.turn]
+    target, path, cluster, is_stuck = state['bot_status']
 
     #print("pos",bot.position, "target", target, "cluster", cluster)
-    if bot.position==target or bot.other.position==target:
+    if bot.position==target:
         #print("We ate it")
         cluster.remove(target)
     # choose a target food pellet if we still don't have one or
@@ -103,10 +102,7 @@ def move(bot, state):
                 cluster = cluster_list[food_ix]
             else:
                 cluster = cluster_list.pop(0)
-        # try to have both bots going for different clusters, when possible
-        if state[abs(bot.turn - 1)][2] == cluster and len(cluster_list)!=0:
-            cluster = cluster_list.pop(0)
-        ##print("new cluster is", cluster)
+
         path = shortest_path_to_cluster(cluster, bot, state['graph']) #shortest_path(bot.position, target, state['graph'])
         path = path[1:]
         target = path[-1]
@@ -116,7 +112,7 @@ def move(bot, state):
         path = shortest_path_to_cluster(cluster, bot, state['graph']) #shortest_path(bot.position, target, state['graph'])
         path = path[1:]
         target = path[-1]
-        state[bot.turn] = (target, path, cluster, False)
+        state['bot_status'] = (target, path, cluster, False)
 
 
     # get the next position along the shortest path to reach our target
@@ -154,7 +150,7 @@ def move(bot, state):
     if next_pos not in safe_positions:
         # 1. Let's forget about this target and this path
         #    We will choose a new target in the next round
-        state[bot.turn] = (None, None, None, False)
+        state['bot_status'] = (None, None, None, False)
         # Choose one safe position at random if we have any
         if safe_positions:
             next_pos = bot.random.choice(safe_positions)
@@ -173,7 +169,7 @@ def move(bot, state):
     suicide_possible_b1 = (not bot.enemy[1].is_noisy) & (bot.enemy[1].position in bot.legal_positions)
     if ((len(np.unique(lastten)) < 4) and (len(lastten)>9)):
         bot.say("I am stuck!")
-        state[bot.turn] = (None, None, None, True)
+        state['bot_status'] = (None, None, None, True)
     if (len(np.unique(lastten)) < 4) & (suicide_possible_b0 or suicide_possible_b1):
         bot.say("goodbye, cruel world")
         if suicide_possible_b0:
